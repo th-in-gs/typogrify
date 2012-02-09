@@ -132,7 +132,7 @@
 		public function filter_post_title_out ( $title ) {
 			
 			if ( Options::get( 'typogrify__title_case' ) ) {
-				$title = htmlentities( Typogrify::title_case( html_entity_decode( $title, 0, 'UTF-8' ) ), ENT_COMPAT | ENT_HTML5, 'UTF-8' );
+				$title = Typogrify::title_case( html_entity_decode( $title, 0, 'UTF-8' ) );
 			}
 			
 			// for now, just bypass the rest of the filters - they cause problems ATM
@@ -175,7 +175,7 @@
 		public function filter_post_title_atom ( $title ) {
 			
 			if ( Options::get( 'typogrify__title_case' ) ) {
-				$title = htmlentities( Typogrify::title_case( html_entity_decode( $title, 0, 'UTF-8' ) ), ENT_COMPAT | ENT_HTML5, 'UTF-8' );
+				Typogrify::title_case( html_entity_decode( $title, 0, 'UTF-8' ) );
 			}
 			
 			// for now, just bypass the rest of the filters - they cause problems ATM
