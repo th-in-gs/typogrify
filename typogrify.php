@@ -2,74 +2,60 @@
 
 	class Typogrify {
 		
-		/**
-		 * Capitalizes a post title, per the rules by John Gruber from:
-		 * 		http://daringfireball.net/2008/05/title_case
-		 * 
-		 * PHP Implementation by Adam Nolley:
-		 * 		http://nanovivid.com/stuff/wordpress/title-case/
-		 * 
-		 * @param string $text The title to capitalize.
-		 * @return string The properly capitalized title.
-		 */
-		public static function title_case ( $text ) {
-			
-			    // Edit this list to change what words should be lowercase
-				$small_words = "a an and as at but by en for if in of on or the to v[.]? via vs[.]?";
-				$small_re = str_replace(" ", "|", $small_words);
-				
-				// Replace HTML entities for spaces and record their old positions
-				$htmlspaces = "/&nbsp;|&#160;|&#32;/";
-				$oldspaces = array();
-				preg_match_all($htmlspaces, $text, $oldspaces, PREG_OFFSET_CAPTURE);
-				
-				// Remove HTML space entities
-				$words = preg_replace($htmlspaces, " ", $text);
-				
-				// Split around sentance divider-ish stuff
-				$words = preg_split('/( [:.;?!][ ] | (?:[ ]|^)["ì])/x', $words, -1, PREG_SPLIT_DELIM_CAPTURE);
-				
-				for ($i = 0; $i < count($words); $i++) {
-				
-					// Skip words with dots in them like del.icio.us
-					$words[$i] = preg_replace_callback('/\b([[:alpha:]][[:lower:].\'í(&\#8217;)]*)\b/x', array( 'self', 'title_case_skip_dotted' ), $words[$i]);
-				
-					// Lowercase our list of small words
-					$words[$i] = preg_replace("/\b($small_re)\b/ei", "strtolower(\"$1\")", $words[$i]);
-				
-					// If the first word in the title is a small word, capitalize it
-					$words[$i] = preg_replace("/\A([[:punct:]]*)($small_re)\b/e", "\"$1\" . ucfirst(\"$2\")", $words[$i]);
-				
-					// If the last word in the title is a small word, capitalize it
-					$words[$i] = preg_replace("/\b($small_re)([[:punct:]]*)\Z/e", "ucfirst(\"$1\") . \"$2\"", $words[$i]);
-					
-				}
-				
-				$words = join($words);
-				
-				// Oddities
-				$words = preg_replace("/ V(s?)\. /i", " v$1. ", $words);                    // v, vs, v., and vs.
-				$words = preg_replace("/(['í]|&#8217;)S\b/i", "$1s", $words);               // 's
-				$words = preg_replace("/\b(AT&T|Q&A)\b/ie", "strtoupper(\"$1\")", $words);  // AT&T and Q&A
-				$words = preg_replace("/-ing\b/i", "-ing", $words);                         // -ing
-				$words = preg_replace("/(&[[:alpha:]]+;)/Ue", "strtolower(\"$1\")", $words);          // html entities
-    
-				// Put HTML space entities back
-				$offset = 0;
-				for ($i = 0; $i < count($oldspaces[0]); $i++) {
-					$offset = $oldspaces[0][$i][1];
-					$words = substr($words, 0, $offset) . $oldspaces[0][$i][0] . substr($words, $offset + 1);
-					$offset += strlen($oldspaces[0][$i][0]);
-				}
-				
-				return $words;
-			
-		}
+		//original Title Case script © John Gruber <daringfireball.net>
+		//javascript port © David Gouch <individed.com>
+		//PHP port of the above by Kroc Camen <camendesign.com>
 		
-		private static function title_case_skip_dotted ( $matches ) {
+		public static function title_case ($title) {
+			//remove HTML, storing it for later
+			//       HTML elements to ignore    | tags  | entities
+			$regx = '/<(code|var)[^>]*>.*?<\/\1>|<[^>]+>|&\S+;/';
+			preg_match_all ($regx, $title, $html, PREG_OFFSET_CAPTURE);
+			$title = preg_replace ($regx, '', $title);
 			
-			return preg_match('/[[:alpha:]] [.] [[:alpha:]]/x', $matches[0]) ? $matches[0] : ucfirst($matches[0]);
+			//find each word (including punctuation attached)
+			preg_match_all ('/[\w\p{L}&`\'‘’"“\.@:\/\{\(\[<>_]+-? */u', $title, $m1, PREG_OFFSET_CAPTURE);
+			foreach ($m1[0] as &$m2) {
+				//shorthand these- "match" and "index"
+				list ($m, $i) = $m2;
+				
+				//correct offsets for multi-byte characters (`PREG_OFFSET_CAPTURE` returns *byte*-offset)
+				//we fix this by recounting the text before the offset using multi-byte aware `strlen`
+				$i = mb_strlen (substr ($title, 0, $i), 'UTF-8');
+				
+				//find words that should always be lowercase…
+				//(never on the first word, and never if preceded by a colon)
+				$m = $i>0 && mb_substr ($title, max (0, $i-2), 1, 'UTF-8') !== ':' && 
+					!preg_match ('/[\x{2014}\x{2013}] ?/u', mb_substr ($title, max (0, $i-2), 2, 'UTF-8')) && 
+					 preg_match ('/^(a(nd?|s|t)?|b(ut|y)|en|for|i[fn]|o[fnr]|t(he|o)|vs?\.?|via)[ \-]/i', $m)
+				?	//…and convert them to lowercase
+					mb_strtolower ($m, 'UTF-8')
+					
+				//else:	brackets and other wrappers
+				: (	preg_match ('/[\'"_{(\[‘“]/u', mb_substr ($title, max (0, $i-1), 3, 'UTF-8'))
+				?	//convert first letter within wrapper to uppercase
+					mb_substr ($m, 0, 1, 'UTF-8').
+					mb_strtoupper (mb_substr ($m, 1, 1, 'UTF-8'), 'UTF-8').
+					mb_substr ($m, 2, mb_strlen ($m, 'UTF-8')-2, 'UTF-8')
+					
+				//else:	do not uppercase these cases
+				: (	preg_match ('/[\])}]/', mb_substr ($title, max (0, $i-1), 3, 'UTF-8')) ||
+					preg_match ('/[A-Z]+|&|\w+[._]\w+/u', mb_substr ($m, 1, mb_strlen ($m, 'UTF-8')-1, 'UTF-8'))
+				?	$m
+					//if all else fails, then no more fringe-cases; uppercase the word
+				:	mb_strtoupper (mb_substr ($m, 0, 1, 'UTF-8'), 'UTF-8').
+					mb_substr ($m, 1, mb_strlen ($m, 'UTF-8'), 'UTF-8')
+				));
+				
+				//resplice the title with the change (`substr_replace` is not multi-byte aware)
+				$title = mb_substr ($title, 0, $i, 'UTF-8').$m.
+					 mb_substr ($title, $i+mb_strlen ($m, 'UTF-8'), mb_strlen ($title, 'UTF-8'), 'UTF-8')
+				;
+			}
 			
+			//restore the HTML
+			foreach ($html[0] as &$tag) $title = substr_replace ($title, $tag[0], $tag[1], 0);
+			return $title;
 		}
 		
 	}
