@@ -132,7 +132,7 @@
 		public function filter_post_title_out ( $title ) {
 			
 			if ( Options::get( 'typogrify__title_case' ) ) {
-				$title = Typogrify::title_case( $title );
+				$title = htmlentities( Typogrify::title_case( html_entity_decode( $title, 0, 'UTF-8' ) ), ENT_COMPAT | ENT_HTML5, 'UTF-8' );
 			}
 			
 			// for now, just bypass the rest of the filters - they cause problems ATM
